@@ -4,12 +4,41 @@ window.onload = function(){
 }
 
 class Book{
-    constructor(title, author){
+    constructor(title, author, id){
         this.title = title;
         this.author = author;
-        this.id = Date.now();
+        this.id = id;
     }
+
+    getID(){
+        return this.id;
+    }
+
+    getTitle(){
+        return this.title;
+    }
+
+    getAuthor(){
+        return this.author;
+    }
+
 }
+
+function saveBookInDatabase(book){
+    db.collection('BooksList').add({
+        Author: book.getAuthor(),
+        Title: book.getTitle(),
+        ID: book.getID()
+    });
+}
+
+// function deleteDataInDatabase(){
+//     const booksListRef = db.collection('BooksList');
+//     const snapshot = await booksListRef.get();
+//     snapshot.forEach(doc => {
+//         doc(doc.id).delete();
+//     })
+// }
 
 class BooksList{
     constructor(){
@@ -18,7 +47,16 @@ class BooksList{
 
     init(){
         document.getElementById("saveButton").addEventListener("click", (e) => this.saveButton(e) );
-        this.loadDataFromStorage();
+        this.loadDataFromDataBase();
+        console.log(this.books);
+    }
+    
+    loadDataFromDataBase(){
+        db.collection('BooksList').get().then((snapshot) => {
+            snapshot.docs.forEach(doc => {
+                this.addBookToParamAndUI(new Book(doc.data().Title, doc.data().Author, doc.data().ID));
+            });
+        });
     }
 
     loadDataFromStorage(){
@@ -39,32 +77,32 @@ class BooksList{
         const title = document.getElementById("bookTitle").value;
         const author = document.getElementById("bookAuthor").value;
 
-        
-
         if(author === "" || title === ""){
             console.log("blank data");
             return;
         }
 
         e.preventDefault();
-        const book = new Book(title, author);
-        this.addBook(book);
-        
+        const book = new Book(title, author, Date.now() + booksList.books.length);
+        this.addBookToParamAndUI(book);
+        saveBookInDatabase(book);
     }
 
-    addBook(book){
+    addBookToParamAndUI(book){
         this.books.push(book);
         ui.addBookToTable(book);
-        this.saveData();
+        this.saveDataInStorage();
     }
 
     removeBookByID(bookID){
-        this.books.forEach((el,index) => {
+        this.books.forEach((el, index) => {
             if(el.id == bookID){
                 this.books.splice(index, 1);
             }
         })
-        this.saveData();
+        this.saveDataInStorage();
+
+        console.log(this.books);
     }
 
     moveBookUp(bookID){
@@ -83,7 +121,7 @@ class BooksList{
             }
         }
 
-        this.saveData();
+        this.saveDataInStorage();
         ui.deleteAllBookRows();
         this.loadDataFromStorage();
     }
@@ -92,6 +130,7 @@ class BooksList{
 
     moveBookDown(bookID){
         let arr = this.books;
+        console.log("przed", arr);
 
         for(let i = 0; i < arr.length; i++){
             let el = arr[i];
@@ -106,25 +145,41 @@ class BooksList{
             }
         }
 
-        this.saveData();
+        console.log("po", arr);
+        this.saveDataInStorage();
         ui.deleteAllBookRows();
         this.loadDataFromStorage();
     }
 
-    saveData(){
+    saveDataInStorage(){
         storage.saveItems(this.books);
     }
+
 }
 
-const booksList = new BooksList();
+var booksList = new BooksList();
 
 class UI{
+
+    print(){
+        console.log("it Works!");
+    }
 
     deleteBook(e){
         const bookID = e.target.getAttribute("data-book-id");
         
         e.target.parentElement.parentElement.remove();
         booksList.removeBookByID(bookID);
+
+        console.log("ID:", bookID);
+        const dbRef = db.collection('BooksList').where('ID', '==', parseInt(bookID));
+        dbRef.get().then(function(querry){
+            querry.forEach(function(doc){
+                doc.ref.delete();
+                console.log("Removed:", bookID);
+            });
+        });
+
     }
 
     deleteAllBookRows(){
